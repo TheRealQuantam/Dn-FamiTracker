@@ -41,6 +41,7 @@
 #include "ChannelMap.h"
 #include "CustomExporters.h"
 #include "CommandLineExport.h"
+#include "TextExporter.h"
 #include "WinSDK/VersionHelpers.h"		// // //
 #include "VisualizerWnd.h"		// // //
 #include "htmlhelp.h"		// // !!
@@ -218,14 +219,19 @@ BOOL CFamiTrackerApp::InitInstance()
 
 	AfxSetPerUserRegistration(FALSE);
 
-	// Handle command line export
-	if (cmdInfo.m_bExport) {
+	// Handle command line commands
+	if (cmdInfo.m_bConvert) {
+		CommandLineConvertTxtFile(cmdInfo.m_strExportFile, cmdInfo.m_strFileName);
+
+		return FALSE;
+	}
+	else if (cmdInfo.m_bExport) {
 		CCommandLineExport exporter;
 		exporter.CommandLineExport(cmdInfo.m_strFileName, cmdInfo.m_strExportFile, cmdInfo.m_strExportLogFile, cmdInfo.m_strExportDPCMFile);
 
 		return FALSE;
 	}
-	if (cmdInfo.m_bHelp) {		// !! !!
+	else if (cmdInfo.m_bHelp) {		// !! !!
 		return FALSE;
 	}
 
@@ -601,6 +607,44 @@ bool CFamiTrackerApp::CheckSingleInstance(CFTCommandLineInfo &cmdInfo)
 	return false;
 }
 
+bool CFamiTrackerApp::CommandLineConvertTxtFile(const CString& txtFileName, const CString& ftmFileName)
+{
+	CRuntimeClass* pRuntimeClass = RUNTIME_CLASS(CFamiTrackerDoc);
+	CObject* pObject = pRuntimeClass->CreateObject();
+	if (pObject == NULL || !pObject->IsKindOf(RUNTIME_CLASS(CFamiTrackerDoc)))
+	{
+		puts("Error: unable to create CFamiTrackerDoc");
+		puts("Press enter to continue . . .");
+
+		return false;
+	}
+
+	std::unique_ptr<CFamiTrackerDoc> pDoc(static_cast<CFamiTrackerDoc*>(pObject));
+	CString res;
+	CTextExport exporter;
+	do 
+		res = exporter.ImportFile(txtFileName, pDoc.get());
+	while (res == _T("Retry"));
+
+	if (res.GetLength() > 0)
+	{
+		_putts(res);
+		puts("Press enter to continue . . .");
+
+		return false;
+	}
+
+	if (!pDoc->OnSaveDocument(ftmFileName))
+	{
+		_tprintf("Error: unable to save '%s'\n", (CString::PCXSTR)ftmFileName);
+		puts("Press enter to continue . . .");
+
+		return false;
+	}
+
+	return true;
+}
+
 ////////////////////////////////////////////////////////
 //  Things that belongs to the synth are kept below!  //
 ////////////////////////////////////////////////////////
@@ -928,6 +972,7 @@ CString MakeFloatString(float val, LPCTSTR format)
 
 CFTCommandLineInfo::CFTCommandLineInfo() : CCommandLineInfo(),
 	m_bLog(false),
+	m_bConvert(false),
 	m_bExport(false),
 	m_bPlay(false),
 	m_bHelp(false),		// // !!
@@ -943,8 +988,13 @@ void CFTCommandLineInfo::ParseParam(const TCHAR* pszParam, BOOL bFlag, BOOL bLas
 	CCommandLineInfo::ParseParam(pszParam, bFlag, bLast);
 
 	if (bFlag) {
+		// Convert file (/convert or /c)
+		if (!_tcsicmp(pszParam, _T("convert")) || !_tcsicmp(pszParam, _T("c"))) {
+			m_bConvert = true;
+			return;
+		}
 		// Export file (/export or /e)
-		if (!_tcsicmp(pszParam, _T("export")) || !_tcsicmp(pszParam, _T("e"))) {
+		else if (!_tcsicmp(pszParam, _T("export")) || !_tcsicmp(pszParam, _T("e"))) {
 			m_bExport = true;
 			return;
 		}
@@ -990,14 +1040,22 @@ void CFTCommandLineInfo::ParseParam(const TCHAR* pszParam, BOOL bFlag, BOOL bLas
 		}
 	}
 	else {
-		// Store NSF name, then log filename
-		if (m_bExport == true) {
+		if (m_bConvert == true) {
+			if (m_strExportFile.GetLength() == 0)
+			{
+				// Source FTM name
+				m_strExportFile = CString(pszParam);
+				return;
+			}
+		}
+		else if (m_bExport == true) {
+			// Store NSF name, then log filename
 			if (m_strExportFile.GetLength() == 0)
 			{
 				m_strExportFile = CString(pszParam);
 				return;
 			}
-			else if(m_strExportLogFile.GetLength() == 0)
+			else if (m_strExportLogFile.GetLength() == 0)
 			{
 				m_strExportLogFile = CString(pszParam);
 				return;

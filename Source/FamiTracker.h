@@ -55,6 +55,7 @@ public:
 public:
 	bool m_bHelp;		// !! !!
 	bool m_bLog;
+	bool m_bConvert;
 	bool m_bExport;
 	bool m_bPlay;
 	CString m_strExportFile;
@@ -155,6 +156,7 @@ private:
 	void RegisterSingleInstance();
 	void UnregisterSingleInstance();
 	void LoadLocalization();
+	bool CommandLineConvertTxtFile(const CString& txtFileName, const CString& ftmFileName);
 
 	// Private variables and objects
 private:
